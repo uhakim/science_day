@@ -32,21 +32,14 @@ export async function POST(request: Request) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("students")
-      .upsert(
-        {
-          grade,
-          class: classNumber,
-          name,
-        },
-        {
-          onConflict: "grade,class,name",
-        },
-      )
       .select("id, grade, class, name")
+      .eq("grade", grade)
+      .eq("class", classNumber)
+      .eq("name", name)
       .single();
 
     if (error || !data) {
-      return jsonError("INTERNAL_ERROR", 500);
+      return jsonError("STUDENT_NOT_FOUND", 401);
     }
 
     const groupType = resolveGroupType(data.grade);

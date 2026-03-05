@@ -96,6 +96,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      registration_settings: {
+        Row: {
+          id: number;
+          open_at: string | null;
+          close_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          open_at?: string | null;
+          close_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          open_at?: string | null;
+          close_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

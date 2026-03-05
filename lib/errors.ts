@@ -1,6 +1,7 @@
 const defaultMessage: Record<string, string> = {
   UNAUTHORIZED: "로그인이 필요합니다.",
-  STUDENT_NOT_FOUND: "학생 정보를 찾을 수 없습니다.",
+  STUDENT_NOT_FOUND: "등록된 학생 정보를 찾을 수 없습니다. 담당 선생님께 문의하세요.",
+  REGISTRATION_CLOSED: "현재 신청 가능한 시간이 아닙니다.",
   LAB_NOT_FOUND: "Lab 정보를 찾을 수 없습니다.",
   NEW_LAB_NOT_FOUND: "변경할 Lab 정보를 찾을 수 없습니다.",
   NO_ACTIVE_REGISTRATION: "활성 신청 정보가 없습니다.",

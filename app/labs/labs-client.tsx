@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LabCard } from "@/components/lab-card";
 import { LogoutButton } from "@/components/logout-button";
 import { RegistrationSummaryCard } from "@/components/registration-summary-card";
 import type { LabSummary, RegistrationSummary, StudentSession } from "@/lib/types";
+import type { RegistrationStatus } from "@/lib/registration-settings";
 
 interface LabsResponse {
   groupType: "LOW" | "HIGH";
@@ -18,9 +20,45 @@ interface MeResponse {
 
 interface LabsClientProps {
   student: Omit<StudentSession, "iat" | "exp">;
+  registrationStatus: RegistrationStatus;
+  openAt: string | null;
+  closeAt: string | null;
 }
 
-export function LabsClient({ student }: LabsClientProps) {
+function useCountdown(targetIso: string | null) {
+  const [secondsLeft, setSecondsLeft] = useState<number>(() => {
+    if (!targetIso) return 0;
+    return Math.max(0, Math.floor((new Date(targetIso).getTime() - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    if (!targetIso) return;
+    const tick = () => {
+      const diff = Math.max(0, Math.floor((new Date(targetIso).getTime() - Date.now()) / 1000));
+      setSecondsLeft(diff);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [targetIso]);
+
+  const h = Math.floor(secondsLeft / 3600);
+  const m = Math.floor((secondsLeft % 3600) / 60);
+  const s = secondsLeft % 60;
+  return { secondsLeft, h, m, s };
+}
+
+export function LabsClient({ student, registrationStatus, openAt, closeAt }: LabsClientProps) {
+  const router = useRouter();
+  const { secondsLeft, h, m, s } = useCountdown(registrationStatus === "pending" ? openAt : null);
+
+  // 카운트다운 끝나면 자동으로 페이지 새로고침 → server에서 상태 재확인
+  useEffect(() => {
+    if (registrationStatus === "pending" && secondsLeft === 0 && openAt) {
+      router.refresh();
+    }
+  }, [registrationStatus, secondsLeft, openAt, router]);
+
   const [labs, setLabs] = useState<LabSummary[]>([]);
   const [registration, setRegistration] = useState<RegistrationSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,6 +172,70 @@ export function LabsClient({ student }: LabsClientProps) {
     }
     return registration.labId === labId ? "취소" : "변경";
   };
+
+  // 신청 대기 화면
+  if (registrationStatus === "pending") {
+    return (
+      <main className="paper-bg flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-white/95 p-8 text-center shadow-lg">
+          <div className="mb-4 text-5xl">⏳</div>
+          <h1 className="text-xl font-extrabold text-[var(--foreground)]">신청 시작 전입니다</h1>
+          {openAt ? (
+            <>
+              <p className="mt-2 text-sm text-slate-500">
+                신청 시작: {new Date(openAt).toLocaleString("ko-KR")}
+              </p>
+              <div className="mt-6 flex justify-center gap-3">
+                {[
+                  { label: "시간", value: h },
+                  { label: "분", value: m },
+                  { label: "초", value: s },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex flex-col items-center rounded-xl bg-slate-100 px-4 py-3 min-w-[64px]">
+                    <span className="text-3xl font-extrabold tabular-nums text-[var(--accent)]">
+                      {String(value).padStart(2, "0")}
+                    </span>
+                    <span className="mt-1 text-xs text-slate-500">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">신청 시작 시간이 아직 설정되지 않았습니다.</p>
+          )}
+          <div className="mt-6">
+            <LogoutButton />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // 신청 마감 화면
+  if (registrationStatus === "closed") {
+    return (
+      <main className="paper-bg flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-white/95 p-8 text-center shadow-lg">
+          <div className="mb-4 text-5xl">🔒</div>
+          <h1 className="text-xl font-extrabold text-[var(--foreground)]">신청이 마감되었습니다</h1>
+          {closeAt && (
+            <p className="mt-2 text-sm text-slate-500">
+              마감 시각: {new Date(closeAt).toLocaleString("ko-KR")}
+            </p>
+          )}
+          <div className="mt-6 flex justify-center gap-2">
+            <Link
+              href="/status"
+              className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-4 py-2 text-sm font-bold"
+            >
+              신청 현황 보기
+            </Link>
+            <LogoutButton />
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="paper-bg min-h-screen p-4 sm:p-6">

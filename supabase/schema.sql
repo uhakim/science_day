@@ -48,6 +48,15 @@ create index if not exists idx_registrations_confirmed_lab
 on public.registrations (lab_id)
 where status = 'confirmed';
 
+create table if not exists public.registration_settings (
+  id int primary key default 1,
+  open_at  timestamptz,
+  close_at timestamptz,
+  updated_at timestamptz(3) not null default date_trunc('milliseconds', clock_timestamp()),
+  constraint ck_registration_settings_single_row check (id = 1)
+);
+insert into public.registration_settings (id) values (1) on conflict do nothing;
+
 create or replace function public.ms_now()
 returns timestamptz(3)
 language sql

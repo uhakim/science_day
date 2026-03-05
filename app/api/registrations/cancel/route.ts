@@ -2,6 +2,7 @@ import { extractErrorCode } from "@/lib/errors";
 import { readApiSession } from "@/lib/api-auth";
 import { jsonError } from "@/lib/http";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { fetchRegistrationSettings, isRegistrationOpen } from "@/lib/registration-settings";
 
 interface CancelRow {
   cancelled_registration_id: number;
@@ -12,9 +13,10 @@ interface CancelRow {
 
 export async function POST() {
   const session = await readApiSession();
-  if (!session) {
-    return jsonError("UNAUTHORIZED", 401);
-  }
+  if (!session) return jsonError("UNAUTHORIZED", 401);
+
+  const settings = await fetchRegistrationSettings();
+  if (!isRegistrationOpen(settings)) return jsonError("REGISTRATION_CLOSED", 403);
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.rpc("rpc_cancel_lab", {

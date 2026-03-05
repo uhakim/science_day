@@ -25,7 +25,7 @@ interface LabRegistration {
   name: string;
 }
 
-type Tab = "students" | "by-lab" | "by-class";
+type Tab = "students" | "by-lab" | "by-class" | "settings";
 
 /* ─────────────────────── helpers ─────────────────────── */
 function groupByLab(rows: LabRegistration[]) {
@@ -260,7 +260,25 @@ function StudentsTab() {
 
       {/* bulk */}
       <div className="rounded-xl border border-[var(--line)] bg-white p-4">
-        <h2 className="mb-1 font-bold text-slate-700">일괄 등록</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-bold text-slate-700">일괄 등록</h2>
+          <button
+            type="button"
+            onClick={() => {
+              const wb = XLSX.utils.book_new();
+              const ws = XLSX.utils.aoa_to_sheet([
+                ["학년", "반", "이름"],
+                [1, 1, "홍길동"],
+                [1, 2, "김철수"],
+              ]);
+              XLSX.utils.book_append_sheet(wb, ws, "학생명단");
+              XLSX.writeFile(wb, "학생명단_서식.xlsx");
+            }}
+            className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-colors"
+          >
+            📄 서식 파일 다운로드
+          </button>
+        </div>
         <p className="mb-3 text-xs text-slate-500">
           엑셀(.xlsx/.xls) 또는 CSV 파일을 업로드하거나, 아래에 직접 입력하세요.
           <br />형식: 첫 번째 열 = 학년, 두 번째 열 = 반, 세 번째 열 = 이름
@@ -410,48 +428,184 @@ function StudentsTab() {
   );
 }
 
+/* ─────────────────────── shared helpers ─────────────────────── */
+
+interface LabInfo { id: string; lab_number: number; group_type: string; }
+
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  const base = d.toLocaleString("ko-KR", {
+    month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const ms = String(d.getMilliseconds()).padStart(3, "0");
+  return `${base}.${ms}`;
+}
+
+function useRegistrationActions() {
+  const [rows, setRows] = useState<LabRegistration[]>([]);
+  const [labs, setLabs] = useState<LabInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [changingId, setChangingId] = useState<number | null>(null);
+  const [changeLabId, setChangeLabId] = useState("");
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [regRes, labRes] = await Promise.all([
+      fetch("/api/admin/registrations").then((r) => r.json()),
+      fetch("/api/admin/labs").then((r) => r.json()),
+    ]);
+    setRows(regRes.registrations ?? []);
+    setLabs(labRes.labs ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
+
+  const handleCancel = async (r: LabRegistration) => {
+    if (!confirm(`${r.grade}학년 ${r.class}반 ${r.name}의 신청을 취소하시겠습니까?`)) return;
+    setProcessingId(r.registration_id);
+    const res = await fetch("/api/admin/registrations/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId: r.student_id }),
+    });
+    if (!res.ok) alert("취소에 실패했습니다.");
+    await fetchData();
+    setProcessingId(null);
+    setChangingId(null);
+  };
+
+  const handleChange = async (r: LabRegistration) => {
+    if (!changeLabId || changeLabId === r.lab_id) return;
+    const targetLab = labs.find((l) => l.id === changeLabId);
+    if (!confirm(`${r.name}을(를) Lab ${r.lab_number} → Lab ${targetLab?.lab_number}으로 변경하시겠습니까?`)) return;
+    setProcessingId(r.registration_id);
+    const res = await fetch("/api/admin/registrations/change", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId: r.student_id, newLabId: changeLabId }),
+    });
+    if (!res.ok) alert("변경에 실패했습니다.");
+    await fetchData();
+    setProcessingId(null);
+    setChangingId(null);
+    setChangeLabId("");
+  };
+
+  const startChanging = (r: LabRegistration) => {
+    setChangingId(r.registration_id);
+    setChangeLabId(r.lab_id);
+  };
+
+  const cancelChanging = () => { setChangingId(null); setChangeLabId(""); };
+
+  return { rows, labs, loading, processingId, changingId, changeLabId,
+           setChangeLabId, fetchData, handleCancel, handleChange, startChanging, cancelChanging };
+}
+
+function RegistrationRow({ r, labs, processingId, changingId, changeLabId, setChangeLabId,
+  handleCancel, handleChange, startChanging, cancelChanging, compact = false }:
+{
+  r: LabRegistration; labs: LabInfo[]; processingId: number | null;
+  changingId: number | null; changeLabId: string;
+  setChangeLabId: (v: string) => void;
+  handleCancel: (r: LabRegistration) => void;
+  handleChange: (r: LabRegistration) => void;
+  startChanging: (r: LabRegistration) => void;
+  cancelChanging: () => void;
+  compact?: boolean;
+}) {
+  const busy = processingId === r.registration_id;
+  const isChanging = changingId === r.registration_id;
+  const otherLabs = labs.filter((l) => l.group_type === r.group_type && l.id !== r.lab_id);
+
+  return (
+    <li className="border-b border-slate-50 py-2 last:border-0">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <div className="flex items-center gap-1.5 text-sm">
+          {!compact && (
+            <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+              r.status === "confirmed" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+            }`}>
+              {r.status === "confirmed" ? "확정" : "대기"}
+            </span>
+          )}
+          <span className="font-medium">{r.grade}학년 {r.class}반 {r.name}</span>
+          {compact && (
+            <span className="text-xs text-slate-400">Lab {r.lab_number}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400">{fmtTime(r.timestamp)}</span>
+          {!isChanging ? (
+            <>
+              <button onClick={() => startChanging(r)} disabled={busy}
+                className="rounded px-2 py-0.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 disabled:opacity-40">
+                변경
+              </button>
+              <button onClick={() => handleCancel(r)} disabled={busy}
+                className="rounded px-2 py-0.5 text-xs font-semibold text-red-500 hover:bg-red-50 disabled:opacity-40">
+                {busy ? "..." : "취소"}
+              </button>
+            </>
+          ) : (
+            <span className="flex items-center gap-1">
+              <select value={changeLabId} onChange={(e) => setChangeLabId(e.target.value)}
+                className="rounded border border-[var(--line)] px-1 py-0.5 text-xs">
+                <option value={r.lab_id}>Lab {r.lab_number} (현재)</option>
+                {otherLabs.map((l) => (
+                  <option key={l.id} value={l.id}>Lab {l.lab_number}</option>
+                ))}
+              </select>
+              <button onClick={() => handleChange(r)} disabled={busy || changeLabId === r.lab_id}
+                className="rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-40">
+                확인
+              </button>
+              <button onClick={cancelChanging}
+                className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100">
+                ✕
+              </button>
+            </span>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function downloadLabExcel(rows: LabRegistration[]) {
   const labNumbers = Array.from(new Set(rows.map((r) => r.lab_number))).sort((a, b) => a - b);
   const labMap = groupByLab(rows);
   const wb = XLSX.utils.book_new();
-
   for (const labNo of labNumbers) {
     const entry = labMap.get(labNo)!;
     const sheetData = [
-      ["상태", "학년", "반", "이름"],
-      ...entry.confirmed.map((r) => ["확정", r.grade, r.class, r.name]),
-      ...entry.waiting.map((r, i) => [`대기 ${i + 1}`, r.grade, r.class, r.name]),
+      ["상태", "학년", "반", "이름", "신청시각"],
+      ...entry.confirmed.map((r) => ["확정", r.grade, r.class, r.name, fmtTime(r.timestamp)]),
+      ...entry.waiting.map((r, i) => [`대기 ${i + 1}`, r.grade, r.class, r.name, fmtTime(r.timestamp)]),
     ];
-    const ws = XLSX.utils.aoa_to_sheet(sheetData);
-    XLSX.utils.book_append_sheet(wb, ws, `Lab${labNo}`);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), `Lab${labNo}`);
   }
-
   XLSX.writeFile(wb, "Lab별_신청현황.xlsx");
 }
 
 function downloadClassExcel(rows: LabRegistration[]) {
   const sheetData = [
-    ["학년", "반", "이름", "Lab", "상태"],
-    ...rows
-      .slice()
+    ["학년", "반", "이름", "Lab", "상태", "신청시각"],
+    ...rows.slice()
       .sort((a, b) => a.grade - b.grade || a.class - b.class || a.name.localeCompare(b.name))
-      .map((r) => [r.grade, r.class, r.name, `Lab ${r.lab_number}`, r.status === "confirmed" ? "확정" : "대기"]),
+      .map((r) => [r.grade, r.class, r.name, `Lab ${r.lab_number}`,
+        r.status === "confirmed" ? "확정" : "대기", fmtTime(r.timestamp)]),
   ];
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
-  XLSX.utils.book_append_sheet(wb, ws, "반별현황");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), "반별현황");
   XLSX.writeFile(wb, "반별_신청현황.xlsx");
 }
 
 function ByLabTab() {
-  const [rows, setRows] = useState<LabRegistration[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/admin/registrations")
-      .then((r) => r.json())
-      .then((d) => { setRows(d.registrations ?? []); setLoading(false); });
-  }, []);
+  const actions = useRegistrationActions();
+  const { rows, loading } = actions;
 
   const labMap = groupByLab(rows);
   const labNumbers = Array.from(new Set(rows.map((r) => r.lab_number))).sort((a, b) => a - b);
@@ -462,70 +616,58 @@ function ByLabTab() {
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <button
-          onClick={() => downloadLabExcel(rows)}
-          className="rounded-lg border border-emerald-600 px-4 py-1.5 text-sm font-bold text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors"
-        >
+        <button onClick={() => downloadLabExcel(rows)}
+          className="rounded-lg border border-emerald-600 px-4 py-1.5 text-sm font-bold text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors">
           📥 엑셀 다운로드
         </button>
       </div>
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {labNumbers.map((labNo) => {
-        const entry = labMap.get(labNo)!;
-        return (
-          <div key={labNo} className="rounded-xl border border-[var(--line)] bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-extrabold text-[var(--foreground)]">
-                Lab {labNo}
-                <span className="ml-2 text-xs font-normal text-slate-400">
-                  {entry.groupType === "LOW" ? "저학년" : "고학년"}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {labNumbers.map((labNo) => {
+          const entry = labMap.get(labNo)!;
+          return (
+            <div key={labNo} className="rounded-xl border border-[var(--line)] bg-white p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="font-extrabold text-[var(--foreground)]">
+                  Lab {labNo}
+                  <span className="ml-2 text-xs font-normal text-slate-400">
+                    {entry.groupType === "LOW" ? "저학년" : "고학년"}
+                  </span>
+                </h2>
+                <span className="text-xs text-slate-500">
+                  확정 {entry.confirmed.length} / 대기 {entry.waiting.length}
                 </span>
-              </h2>
-              <span className="text-xs text-slate-500">
-                확정 {entry.confirmed.length} / 대기 {entry.waiting.length}
-              </span>
+              </div>
+              {entry.confirmed.length > 0 && (
+                <>
+                  <p className="mb-1 mt-2 text-xs font-bold text-emerald-600">확정</p>
+                  <ul>
+                    {entry.confirmed.map((r) => (
+                      <RegistrationRow key={r.registration_id} r={r} {...actions} />
+                    ))}
+                  </ul>
+                </>
+              )}
+              {entry.waiting.length > 0 && (
+                <>
+                  <p className="mb-1 mt-2 text-xs font-bold text-amber-600">대기</p>
+                  <ul>
+                    {entry.waiting.map((r) => (
+                      <RegistrationRow key={r.registration_id} r={r} {...actions} />
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
-            {entry.confirmed.length > 0 && (
-              <>
-                <p className="mb-1 text-xs font-bold text-emerald-600">확정</p>
-                <ul className="mb-3 space-y-0.5">
-                  {entry.confirmed.map((r) => (
-                    <li key={r.registration_id} className="text-sm">
-                      {r.grade}학년 {r.class}반 {r.name}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {entry.waiting.length > 0 && (
-              <>
-                <p className="mb-1 text-xs font-bold text-amber-600">대기</p>
-                <ul className="space-y-0.5">
-                  {entry.waiting.map((r, i) => (
-                    <li key={r.registration_id} className="text-sm text-slate-500">
-                      {i + 1}. {r.grade}학년 {r.class}반 {r.name}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function ByClassTab() {
-  const [rows, setRows] = useState<LabRegistration[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/admin/registrations")
-      .then((r) => r.json())
-      .then((d) => { setRows(d.registrations ?? []); setLoading(false); });
-  }, []);
+  const actions = useRegistrationActions();
+  const { rows, loading } = actions;
 
   const classMap = groupByClass(rows);
   const keys = Array.from(classMap.keys()).sort();
@@ -536,46 +678,166 @@ function ByClassTab() {
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <button
-          onClick={() => downloadClassExcel(rows)}
-          className="rounded-lg border border-emerald-600 px-4 py-1.5 text-sm font-bold text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors"
-        >
+        <button onClick={() => downloadClassExcel(rows)}
+          className="rounded-lg border border-emerald-600 px-4 py-1.5 text-sm font-bold text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors">
           📥 엑셀 다운로드
         </button>
       </div>
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {keys.map((key) => {
-        const list = classMap.get(key)!;
-        const [g, c] = key.split("-");
-        return (
-          <div key={key} className="rounded-xl border border-[var(--line)] bg-white p-4">
-            <h2 className="mb-3 font-extrabold text-[var(--foreground)]">
-              {g}학년 {c}반
-              <span className="ml-2 text-xs font-normal text-slate-400">{list.length}명 신청</span>
-            </h2>
-            <ul className="space-y-1">
-              {list.map((r) => (
-                <li key={r.registration_id} className="flex items-center justify-between text-sm">
-                  <span>{r.name}</span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-xs text-slate-400">Lab {r.lab_number}</span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
-                        r.status === "confirmed"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {r.status === "confirmed" ? "확정" : "대기"}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {keys.map((key) => {
+          const list = classMap.get(key)!;
+          const [g, c] = key.split("-");
+          return (
+            <div key={key} className="rounded-xl border border-[var(--line)] bg-white p-4">
+              <h2 className="mb-2 font-extrabold text-[var(--foreground)]">
+                {g}학년 {c}반
+                <span className="ml-2 text-xs font-normal text-slate-400">{list.length}명</span>
+              </h2>
+              <ul>
+                {list.map((r) => (
+                  <RegistrationRow key={r.registration_id} r={r} compact {...actions} />
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </div>
+  );
+}
+
+/* ─────────────────────── settings tab ─────────────────────── */
+
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  pending: { label: "신청 대기 중", color: "text-amber-600" },
+  open:    { label: "신청 진행 중", color: "text-emerald-600" },
+  closed:  { label: "신청 마감", color: "text-slate-500" },
+};
+
+function toLocalDatetimeValue(iso: string | null): string {
+  if (!iso) return "";
+  // datetime-local input requires "YYYY-MM-DDTHH:mm"
+  return new Date(iso).toISOString().slice(0, 16);
+}
+
+function SettingsTab() {
+  const [openAt, setOpenAt] = useState("");
+  const [closeAt, setCloseAt] = useState("");
+  const [status, setStatus] = useState<string>("pending");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [msgError, setMsgError] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        setOpenAt(toLocalDatetimeValue(d.openAt));
+        setCloseAt(toLocalDatetimeValue(d.closeAt));
+        setStatus(d.status ?? "pending");
+      });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg(null);
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        openAt: openAt ? new Date(openAt).toISOString() : null,
+        closeAt: closeAt ? new Date(closeAt).toISOString() : null,
+      }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setStatus(d.status);
+      setMsg("저장되었습니다.");
+      setMsgError(false);
+    } else {
+      setMsg("저장에 실패했습니다.");
+      setMsgError(true);
+    }
+    setSaving(false);
+  };
+
+  const handleClear = async () => {
+    if (!confirm("신청 시간 설정을 초기화하시겠습니까?\n학생들이 신청 화면에 접근할 수 없게 됩니다.")) return;
+    setSaving(true);
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ openAt: null, closeAt: null }),
+    });
+    if (res.ok) {
+      setOpenAt("");
+      setCloseAt("");
+      setStatus("pending");
+      setMsg("초기화되었습니다.");
+      setMsgError(false);
+    }
+    setSaving(false);
+  };
+
+  const info = STATUS_LABEL[status] ?? STATUS_LABEL.pending;
+
+  return (
+    <div className="mx-auto max-w-lg">
+      <div className="rounded-xl border border-[var(--line)] bg-white p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-slate-700">신청 가능 시간 설정</h2>
+          <span className={`text-sm font-bold ${info.color}`}>● {info.label}</span>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-bold text-slate-600">시작 시각</label>
+            <input
+              type="datetime-local"
+              value={openAt}
+              onChange={(e) => setOpenAt(e.target.value)}
+              className="w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-bold text-slate-600">
+              종료 시각 <span className="font-normal text-slate-400">(비워두면 무제한)</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={closeAt}
+              onChange={(e) => setCloseAt(e.target.value)}
+              className="w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={saving || !openAt}
+            className="rounded-lg bg-[var(--accent)] px-5 py-2 text-sm font-bold text-white hover:bg-[var(--accent-strong)] disabled:bg-slate-400"
+          >
+            {saving ? "저장 중..." : "저장"}
+          </button>
+          <button
+            onClick={handleClear}
+            disabled={saving}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          >
+            초기화
+          </button>
+          {msg && (
+            <span className={`text-sm font-semibold ${msgError ? "text-red-600" : "text-emerald-600"}`}>
+              {msg}
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-slate-400">
+          * 저장 후 즉시 적용됩니다. 시작 시각이 되면 학생들 화면이 자동으로 전환됩니다.
+        </p>
+      </div>
     </div>
   );
 }
@@ -589,6 +851,7 @@ export function AdminClient() {
     { id: "students", label: "학생 명단" },
     { id: "by-lab", label: "Lab별 현황" },
     { id: "by-class", label: "반별 현황" },
+    { id: "settings", label: "시간 설정" },
   ];
 
   return (
@@ -613,6 +876,7 @@ export function AdminClient() {
       {tab === "students" && <StudentsTab />}
       {tab === "by-lab" && <ByLabTab />}
       {tab === "by-class" && <ByClassTab />}
+      {tab === "settings" && <SettingsTab />}
     </div>
   );
 }
