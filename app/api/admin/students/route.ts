@@ -46,3 +46,23 @@ export async function POST(request: Request) {
     return jsonError("BAD_REQUEST");
   }
 }
+
+export async function DELETE(request: Request) {
+  const session = await readAdminApiSession();
+  if (!session) return jsonError("UNAUTHORIZED", 401);
+
+  try {
+    const body = (await request.json()) as { ids?: string[] };
+    const ids = body.ids;
+
+    if (!Array.isArray(ids) || ids.length === 0) return jsonError("BAD_REQUEST");
+
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("students").delete().in("id", ids);
+
+    if (error) return jsonError("INTERNAL_ERROR", 500);
+    return NextResponse.json({ deleted: ids.length });
+  } catch {
+    return jsonError("BAD_REQUEST");
+  }
+}

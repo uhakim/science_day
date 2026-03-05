@@ -67,12 +67,16 @@ function StudentsTab() {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // bulk
+  // bulk register
   const [bulkText, setBulkText] = useState("");
   const [bulking, setBulking] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
   const [bulkError, setBulkError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // selection & delete
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -166,6 +170,53 @@ function StudentsTab() {
       setBulkError(true);
     }
     setBulking(false);
+  };
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((s) => selectedIds.has(s.id));
+  const someSelected = filtered.some((s) => selectedIds.has(s.id));
+
+  const toggleAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((s) => next.delete(s.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((s) => next.add(s.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleDelete = async (ids: string[]) => {
+    if (!confirm(`${ids.length}명을 삭제하시겠습니까?\n삭제 시 해당 학생의 신청 내역도 함께 삭제됩니다.`)) return;
+    setDeleting(true);
+    const res = await fetch("/api/admin/students", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (res.ok) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      await fetchStudents();
+    }
+    setDeleting(false);
   };
 
   return (
@@ -263,9 +314,18 @@ function StudentsTab() {
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
             {filtered.length}명
           </span>
+          {someSelected && (
+            <button
+              onClick={() => handleDelete(Array.from(selectedIds).filter((id) => filtered.some((s) => s.id === id)))}
+              disabled={deleting}
+              className="rounded-lg bg-red-500 px-3 py-1 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-50"
+            >
+              {deleting ? "삭제 중..." : `선택 삭제 (${Array.from(selectedIds).filter((id) => filtered.some((s) => s.id === id)).length}명)`}
+            </button>
+          )}
           <select
             value={filterGrade}
-            onChange={(e) => setFilterGrade(e.target.value)}
+            onChange={(e) => { setFilterGrade(e.target.value); setSelectedIds(new Set()); }}
             className="ml-auto rounded-lg border border-[var(--line)] px-2 py-1 text-sm"
           >
             <option value="all">전체 학년</option>
@@ -273,7 +333,7 @@ function StudentsTab() {
           </select>
           <select
             value={filterClass}
-            onChange={(e) => setFilterClass(e.target.value)}
+            onChange={(e) => { setFilterClass(e.target.value); setSelectedIds(new Set()); }}
             className="rounded-lg border border-[var(--line)] px-2 py-1 text-sm"
           >
             <option value="all">전체 반</option>
@@ -287,26 +347,56 @@ function StudentsTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--line)] text-left text-xs text-slate-500">
+                  <th className="pb-2 pr-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      ref={(el) => { if (el) el.indeterminate = someSelected && !allFilteredSelected; }}
+                      onChange={toggleAll}
+                      className="cursor-pointer"
+                    />
+                  </th>
                   <th className="pb-2 pr-3">학년</th>
                   <th className="pb-2 pr-3">반</th>
                   <th className="pb-2 pr-3">이름</th>
                   <th className="pb-2">등록일시</th>
+                  <th className="pb-2 w-12"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr
+                    key={s.id}
+                    className={`border-b border-slate-50 hover:bg-slate-50 ${selectedIds.has(s.id) ? "bg-red-50" : ""}`}
+                  >
+                    <td className="py-1.5 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(s.id)}
+                        onChange={() => toggleOne(s.id)}
+                        className="cursor-pointer"
+                      />
+                    </td>
                     <td className="py-1.5 pr-3">{s.grade}학년</td>
                     <td className="py-1.5 pr-3">{s.class}반</td>
                     <td className="py-1.5 pr-3 font-medium">{s.name}</td>
                     <td className="py-1.5 text-xs text-slate-400">
                       {new Date(s.created_at).toLocaleString("ko-KR")}
                     </td>
+                    <td className="py-1.5">
+                      <button
+                        onClick={() => handleDelete([s.id])}
+                        disabled={deleting}
+                        className="rounded px-2 py-0.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                      >
+                        삭제
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-4 text-center text-slate-400">
+                    <td colSpan={6} className="py-4 text-center text-slate-400">
                       학생이 없습니다.
                     </td>
                   </tr>
