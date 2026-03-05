@@ -1,36 +1,116 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+﻿# 과학의 날 Lab 신청 시스템
 
-## Getting Started
+Next.js(App Router) + TailwindCSS + Supabase(PostgreSQL/RPC) 기반 예제 프로젝트입니다.
 
-First, run the development server:
+## 주요 기능
+
+- 학생 로그인 (`grade + class + name` 유니크 식별)
+- 학년군별 Lab 목록 조회 (LOW/HIGH)
+- Lab 신청 / 변경 / 취소
+- 정원 초과 시 자동 대기 등록
+- confirmed 취소 시 waiting 자동 승격
+- 신청 시간(밀리초) 및 대기 순번 표시
+
+## 프로젝트 구조
+
+```text
+science-day-app/
+  app/
+    api/
+      auth/
+        login/route.ts
+        logout/route.ts
+      labs/route.ts
+      registrations/
+        apply/route.ts
+        change/route.ts
+        cancel/route.ts
+        me/route.ts
+    labs/
+      labs-client.tsx
+      page.tsx
+    login/
+      login-form.tsx
+      page.tsx
+    status/
+      page.tsx
+      status-client.tsx
+    globals.css
+    layout.tsx
+    page.tsx
+  components/
+    lab-card.tsx
+    logout-button.tsx
+    registration-summary-card.tsx
+  lib/
+    api-auth.ts
+    env.ts
+    errors.ts
+    format.ts
+    http.ts
+    server-auth.ts
+    sessions.ts
+    supabase.ts
+    types.ts
+  supabase/
+    schema.sql
+  .env.example
+```
+
+## 실행 방법
+
+1. 패키지 설치
+
+```bash
+npm install
+```
+
+2. 환경 변수 설정
+
+`.env.example`를 복사해 `.env.local` 생성 후 값 입력:
+
+```bash
+cp .env.example .env.local
+```
+
+필수 값:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SESSION_SECRET`
+
+3. Supabase SQL 실행
+
+Supabase SQL Editor에서 `supabase/schema.sql` 전체 실행.
+
+4. 개발 서버 실행
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 `http://localhost:3000` 접속.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase SQL
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- 위치: `supabase/schema.sql`
+- 포함 내용:
+  - `students`, `labs`, `registrations` 테이블
+  - 부분 유니크 인덱스(학생 1명 활성 신청 1건)
+  - `rpc_apply_lab`, `rpc_change_lab`, `rpc_cancel_lab`, `rpc_promote_waiting`
+  - `rpc_get_labs_for_group`, `rpc_get_my_registration`
+  - 초기 Lab 12개(LOW 1~6, HIGH 1~6) seed
 
-## Learn More
+## Vercel 배포
 
-To learn more about Next.js, take a look at the following resources:
+1. Git 저장소에 코드 push
+2. Vercel에서 프로젝트 Import
+3. Environment Variables 설정:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (선택)
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SESSION_SECRET`
+4. Deploy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+배포 후에도 Supabase DB에는 `supabase/schema.sql`이 적용되어 있어야 합니다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
