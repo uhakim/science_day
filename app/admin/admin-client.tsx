@@ -9,6 +9,8 @@ interface Student {
   grade: number;
   class: number;
   name: string;
+  birthDate: string | null;
+  hasPassword: boolean;
   created_at: string;
 }
 
@@ -64,6 +66,7 @@ function StudentsTab() {
   const [grade, setGrade] = useState("1");
   const [cls, setCls] = useState("1");
   const [name, setName] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -77,6 +80,9 @@ function StudentsTab() {
   // selection & delete
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [tableMessage, setTableMessage] = useState<string | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -103,13 +109,20 @@ function StudentsTab() {
     const res = await fetch("/api/admin/students", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ grade: Number(grade), class: Number(cls), name: name.trim() }),
+      body: JSON.stringify({
+        grade: Number(grade),
+        class: Number(cls),
+        name: name.trim(),
+        birthDate,
+      }),
     });
     if (res.ok) {
       setName("");
+      setBirthDate("");
       await fetchStudents();
     } else {
-      setAddError("추가에 실패했습니다.");
+      const data = await res.json().catch(() => null);
+      setAddError(data?.error?.message ?? "추가에 실패했습니다.");
     }
     setAdding(false);
   };
@@ -124,10 +137,10 @@ function StudentsTab() {
         const data = evt.target?.result;
         const wb = XLSX.read(data, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+        const rows = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, raw: false });
         const lines = rows
-          .filter((r) => r.length >= 3 && r[0] !== undefined)
-          .map((r) => `${r[0]},${r[1]},${r[2]}`);
+          .filter((r) => r.length >= 4 && r[0] !== undefined)
+          .map((r) => `${r[0]},${r[1]},${r[2]},${r[3]}`);
         setBulkText(lines.join("\n"));
         setBulkMsg(null);
         setBulkError(false);
@@ -152,6 +165,7 @@ function StudentsTab() {
         grade: Number(parts[0]?.trim()),
         class: Number(parts[1]?.trim()),
         name: parts[2]?.trim() ?? "",
+        birthDate: parts[3]?.trim() ?? "",
       };
     });
     const res = await fetch("/api/admin/students/bulk", {
@@ -166,7 +180,8 @@ function StudentsTab() {
       setBulkText("");
       await fetchStudents();
     } else {
-      setBulkMsg("일괄 등록 실패. 형식을 확인하세요.");
+      const data = await res.json().catch(() => null);
+      setBulkMsg(data?.error?.message ?? "일괄 등록 실패. 형식을 확인하세요.");
       setBulkError(true);
     }
     setBulking(false);
@@ -195,7 +210,11 @@ function StudentsTab() {
   const toggleOne = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
@@ -203,6 +222,8 @@ function StudentsTab() {
   const handleDelete = async (ids: string[]) => {
     if (!confirm(`${ids.length}명을 삭제하시겠습니까?\n삭제 시 해당 학생의 신청 내역도 함께 삭제됩니다.`)) return;
     setDeleting(true);
+    setTableMessage(null);
+    setTableError(null);
     const res = await fetch("/api/admin/students", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -215,8 +236,37 @@ function StudentsTab() {
         return next;
       });
       await fetchStudents();
+      setTableMessage("학생 정보가 삭제되었습니다.");
+    } else {
+      setTableError("학생 삭제에 실패했습니다.");
     }
     setDeleting(false);
+  };
+
+  const handleResetPassword = async (student: Student) => {
+    if (!confirm(`${student.grade}학년 ${student.class}반 ${student.name}의 비밀번호를 생년월일 초기값으로 재설정하시겠습니까?`)) {
+      return;
+    }
+
+    setResettingId(student.id);
+    setTableMessage(null);
+    setTableError(null);
+
+    const res = await fetch("/api/admin/students/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId: student.id }),
+    });
+
+    if (res.ok) {
+      setTableMessage("비밀번호가 생년월일 초기값으로 재설정되었습니다.");
+      await fetchStudents();
+    } else {
+      const data = await res.json().catch(() => null);
+      setTableError(data?.error?.message ?? "비밀번호 초기화에 실패했습니다.");
+    }
+
+    setResettingId(null);
   };
 
   return (
@@ -247,6 +297,13 @@ function StudentsTab() {
             className="rounded-lg border border-[var(--line)] px-2 py-1.5 text-sm"
             required
           />
+          <input
+            type="date"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            className="rounded-lg border border-[var(--line)] px-2 py-1.5 text-sm"
+            required
+          />
           <button
             type="submit"
             disabled={adding}
@@ -267,9 +324,9 @@ function StudentsTab() {
             onClick={() => {
               const wb = XLSX.utils.book_new();
               const ws = XLSX.utils.aoa_to_sheet([
-                ["학년", "반", "이름"],
-                [1, 1, "홍길동"],
-                [1, 2, "김철수"],
+                ["학년", "반", "이름", "생년월일"],
+                [1, 1, "홍길동", "20140312"],
+                [1, 2, "김철수", "20140521"],
               ]);
               XLSX.utils.book_append_sheet(wb, ws, "학생명단");
               XLSX.writeFile(wb, "학생명단_서식.xlsx");
@@ -281,7 +338,8 @@ function StudentsTab() {
         </div>
         <p className="mb-3 text-xs text-slate-500">
           엑셀(.xlsx/.xls) 또는 CSV 파일을 업로드하거나, 아래에 직접 입력하세요.
-          <br />형식: 첫 번째 열 = 학년, 두 번째 열 = 반, 세 번째 열 = 이름
+          <br />형식: 첫 번째 열 = 학년, 두 번째 열 = 반, 세 번째 열 = 이름, 네 번째 열 = 생년월일
+          <br />생년월일은 `YYYYMMDD` 또는 `YYYY-MM-DD` 형식을 사용하세요.
         </p>
 
         {/* 파일 업로드 */}
@@ -306,7 +364,7 @@ function StudentsTab() {
           value={bulkText}
           onChange={(e) => setBulkText(e.target.value)}
           rows={6}
-          placeholder={"1,1,홍길동\n1,2,김철수\n2,1,이영희"}
+          placeholder={"1,1,홍길동,20140312\n1,2,김철수,20140521\n2,1,이영희,20130208"}
           className="w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm font-mono"
         />
         <div className="mt-2 flex items-center gap-3">
@@ -358,6 +416,16 @@ function StudentsTab() {
             {[1,2,3,4].map((v) => <option key={v} value={v}>{v}반</option>)}
           </select>
         </div>
+        {tableMessage ? (
+          <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+            {tableMessage}
+          </p>
+        ) : null}
+        {tableError ? (
+          <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">
+            {tableError}
+          </p>
+        ) : null}
         {loading ? (
           <p className="text-sm text-slate-500">불러오는 중...</p>
         ) : (
@@ -377,8 +445,10 @@ function StudentsTab() {
                   <th className="pb-2 pr-3">학년</th>
                   <th className="pb-2 pr-3">반</th>
                   <th className="pb-2 pr-3">이름</th>
+                  <th className="pb-2 pr-3">생년월일</th>
+                  <th className="pb-2 pr-3">비밀번호</th>
                   <th className="pb-2">등록일시</th>
-                  <th className="pb-2 w-12"></th>
+                  <th className="pb-2 text-right">관리</th>
                 </tr>
               </thead>
               <tbody>
@@ -398,10 +468,26 @@ function StudentsTab() {
                     <td className="py-1.5 pr-3">{s.grade}학년</td>
                     <td className="py-1.5 pr-3">{s.class}반</td>
                     <td className="py-1.5 pr-3 font-medium">{s.name}</td>
+                    <td className="py-1.5 pr-3 text-xs text-slate-500">
+                      {s.birthDate ? s.birthDate.replaceAll("-", ".") : "-"}
+                    </td>
+                    <td className="py-1.5 pr-3 text-xs text-slate-500">
+                      {s.hasPassword ? "설정됨" : "미설정"}
+                    </td>
                     <td className="py-1.5 text-xs text-slate-400">
                       {new Date(s.created_at).toLocaleString("ko-KR")}
                     </td>
                     <td className="py-1.5">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => {
+                            void handleResetPassword(s);
+                          }}
+                          disabled={resettingId === s.id}
+                          className="rounded px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-40"
+                        >
+                          {resettingId === s.id ? "초기화 중..." : "비밀번호 초기화"}
+                        </button>
                       <button
                         onClick={() => handleDelete([s.id])}
                         disabled={deleting}
@@ -409,12 +495,13 @@ function StudentsTab() {
                       >
                         삭제
                       </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-4 text-center text-slate-400">
+                    <td colSpan={8} className="py-4 text-center text-slate-400">
                       학생이 없습니다.
                     </td>
                   </tr>
@@ -460,7 +547,28 @@ function useRegistrationActions() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { void fetchData(); }, [fetchData]);
+  useEffect(() => {
+    let active = true;
+
+    async function loadInitialData() {
+      const [regRes, labRes] = await Promise.all([
+        fetch("/api/admin/registrations").then((r) => r.json()),
+        fetch("/api/admin/labs").then((r) => r.json()),
+      ]);
+
+      if (!active) return;
+
+      setRows(regRes.registrations ?? []);
+      setLabs(labRes.labs ?? []);
+      setLoading(false);
+    }
+
+    void loadInitialData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleCancel = async (r: LabRegistration) => {
     if (!confirm(`${r.grade}학년 ${r.class}반 ${r.name}의 신청을 취소하시겠습니까?`)) return;

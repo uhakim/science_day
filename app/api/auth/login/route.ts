@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSessionToken, getSessionMaxAgeSeconds, SESSION_COOKIE_NAME } from "@/lib/sessions";
+import { verifyPassword } from "@/lib/password";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { jsonError } from "@/lib/http";
 
@@ -13,11 +14,13 @@ export async function POST(request: Request) {
       grade?: number;
       class?: number;
       name?: string;
+      password?: string;
     };
 
     const grade = Number(body.grade);
     const classNumber = Number(body.class);
     const name = String(body.name ?? "").trim();
+    const password = typeof body.password === "string" ? body.password : "";
 
     if (!Number.isInteger(grade) || grade < 1 || grade > 6) {
       return jsonError("BAD_REQUEST");
@@ -28,18 +31,21 @@ export async function POST(request: Request) {
     if (!name) {
       return jsonError("BAD_REQUEST");
     }
+    if (!password) {
+      return jsonError("BAD_REQUEST");
+    }
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("students")
-      .select("id, grade, class, name")
+      .select("id, grade, class, name, password_hash")
       .eq("grade", grade)
       .eq("class", classNumber)
       .eq("name", name)
       .single();
 
-    if (error || !data) {
-      return jsonError("STUDENT_NOT_FOUND", 401);
+    if (error || !data || !(await verifyPassword(password, data.password_hash))) {
+      return jsonError("INVALID_CREDENTIALS", 401);
     }
 
     const groupType = resolveGroupType(data.grade);
@@ -76,4 +82,3 @@ export async function POST(request: Request) {
     return jsonError("BAD_REQUEST");
   }
 }
-

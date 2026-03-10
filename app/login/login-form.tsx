@@ -8,6 +8,7 @@ export function LoginForm() {
   const [grade, setGrade] = useState("1");
   const [classNumber, setClassNumber] = useState("1");
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +25,7 @@ export function LoginForm() {
           grade: Number(grade),
           class: Number(classNumber),
           name: name.trim(),
+          password,
         }),
       });
 
@@ -85,6 +87,17 @@ export function LoginForm() {
         />
       </div>
 
+      <div>
+        <label className="mb-1 block text-sm font-bold text-slate-700">비밀번호</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none focus:border-[var(--accent)]"
+          required
+        />
+      </div>
+
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">
           {error}
@@ -101,4 +114,3 @@ export function LoginForm() {
     </form>
   );
 }
-

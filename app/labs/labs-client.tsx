@@ -255,6 +255,12 @@ export function LabsClient({ student, registrationStatus, openAt, closeAt }: Lab
               >
                 신청 현황 화면
               </Link>
+              <Link
+                href="/account/password"
+                className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-sm font-bold"
+              >
+                비밀번호 변경
+              </Link>
               <LogoutButton />
             </div>
           </div>
@@ -310,4 +316,3 @@ export function LabsClient({ student, registrationStatus, openAt, closeAt }: Lab
     </main>
   );
 }
-

@@ -5,10 +5,22 @@ create table if not exists public.students (
   grade smallint not null check (grade between 1 and 6),
   "class" smallint not null check ("class" >= 1),
   name text not null check (btrim(name) <> ''),
+  birth_date date,
+  password_hash text,
+  password_updated_at timestamptz(3),
   created_at timestamptz(3) not null default date_trunc('milliseconds', clock_timestamp()),
   updated_at timestamptz(3) not null default date_trunc('milliseconds', clock_timestamp()),
   constraint uq_students_identity unique (grade, "class", name)
 );
+
+alter table public.students
+  add column if not exists birth_date date,
+  add column if not exists password_hash text,
+  add column if not exists password_updated_at timestamptz(3);
+
+comment on column public.students.birth_date is '학생 생년월일. 초기 비밀번호 생성 및 관리자 초기화 기준';
+comment on column public.students.password_hash is '학생 로그인 비밀번호 해시';
+comment on column public.students.password_updated_at is '학생 비밀번호 마지막 변경 시각';
 
 create table if not exists public.labs (
   id uuid primary key default gen_random_uuid(),
@@ -576,4 +588,3 @@ revoke all on function public.rpc_admin_get_students() from public;
 
 grant execute on function public.rpc_admin_get_lab_registrations() to service_role;
 grant execute on function public.rpc_admin_get_students() to service_role;
-

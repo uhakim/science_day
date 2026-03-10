@@ -83,6 +83,12 @@ export function StatusClient({ student }: StatusClientProps) {
               >
                 Lab 선택 화면
               </Link>
+              <Link
+                href="/account/password"
+                className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-sm font-bold"
+              >
+                비밀번호 변경
+              </Link>
               <LogoutButton />
             </div>
           </div>
@@ -115,4 +121,3 @@ export function StatusClient({ student }: StatusClientProps) {
     </main>
   );
 }
-

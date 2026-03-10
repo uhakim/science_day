@@ -15,6 +15,9 @@ export interface Database {
           grade: number;
           class: number;
           name: string;
+          birth_date: string | null;
+          password_hash: string | null;
+          password_updated_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -23,6 +26,9 @@ export interface Database {
           grade: number;
           class: number;
           name: string;
+          birth_date?: string | null;
+          password_hash?: string | null;
+          password_updated_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -31,6 +37,9 @@ export interface Database {
           grade?: number;
           class?: number;
           name?: string;
+          birth_date?: string | null;
+          password_hash?: string | null;
+          password_updated_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -219,4 +228,3 @@ export interface Database {
     };
   };
 }
-
