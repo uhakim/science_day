@@ -71,7 +71,7 @@ export function PasswordForm({ student }: PasswordFormProps) {
                 href="/labs"
                 className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-sm font-bold"
               >
-                Lab 선택
+                조 선택
               </Link>
               <Link
                 href="/status"

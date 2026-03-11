@@ -9,7 +9,7 @@ const nanum = Nanum_Gothic({
 });
 
 export const metadata: Metadata = {
-  title: "과학의 날 Lab 신청",
+  title: "과학의 날 조 신청",
   description: "초등학교 과학 행사 참가 신청 시스템",
 };
 

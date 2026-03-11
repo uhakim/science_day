@@ -14,7 +14,7 @@ export default async function LoginPage() {
         <div className="mb-6 text-center">
           <div className="mb-3 text-5xl">🔬</div>
           <h1 className="text-2xl font-extrabold text-[var(--foreground)]">
-            과학의 날 Lab 신청
+            과학의 날 조 신청
           </h1>
           <p className="mt-2 text-sm text-slate-500">
             학년, 반, 이름과 비밀번호를 입력하면 신청 화면으로 이동합니다.

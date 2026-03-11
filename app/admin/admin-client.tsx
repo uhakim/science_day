@@ -587,7 +587,7 @@ function useRegistrationActions() {
   const handleChange = async (r: LabRegistration) => {
     if (!changeLabId || changeLabId === r.lab_id) return;
     const targetLab = labs.find((l) => l.id === changeLabId);
-    if (!confirm(`${r.name}을(를) Lab ${r.lab_number} → Lab ${targetLab?.lab_number}으로 변경하시겠습니까?`)) return;
+    if (!confirm(`${r.name}을(를) ${r.lab_number}조 → ${targetLab?.lab_number}조로 변경하시겠습니까?`)) return;
     setProcessingId(r.registration_id);
     const res = await fetch("/api/admin/registrations/change", {
       method: "POST",
@@ -641,7 +641,7 @@ function RegistrationRow({ r, labs, processingId, changingId, changeLabId, setCh
           )}
           <span className="font-medium">{r.grade}학년 {r.class}반 {r.name}</span>
           {compact && (
-            <span className="text-xs text-slate-400">Lab {r.lab_number}</span>
+            <span className="text-xs text-slate-400">{r.lab_number}조</span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -661,9 +661,9 @@ function RegistrationRow({ r, labs, processingId, changingId, changeLabId, setCh
             <span className="flex items-center gap-1">
               <select value={changeLabId} onChange={(e) => setChangeLabId(e.target.value)}
                 className="rounded border border-[var(--line)] px-1 py-0.5 text-xs">
-                <option value={r.lab_id}>Lab {r.lab_number} (현재)</option>
+                <option value={r.lab_id}>{r.lab_number}조 (현재)</option>
                 {otherLabs.map((l) => (
-                  <option key={l.id} value={l.id}>Lab {l.lab_number}</option>
+                  <option key={l.id} value={l.id}>{l.lab_number}조</option>
                 ))}
               </select>
               <button onClick={() => handleChange(r)} disabled={busy || changeLabId === r.lab_id}
@@ -693,17 +693,17 @@ function downloadLabExcel(rows: LabRegistration[]) {
       ...entry.confirmed.map((r) => ["확정", r.grade, r.class, r.name, fmtTime(r.timestamp)]),
       ...entry.waiting.map((r, i) => [`대기 ${i + 1}`, r.grade, r.class, r.name, fmtTime(r.timestamp)]),
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), `Lab${labNo}`);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), `${labNo}조`);
   }
-  XLSX.writeFile(wb, "Lab별_신청현황.xlsx");
+  XLSX.writeFile(wb, "조별_신청현황.xlsx");
 }
 
 function downloadClassExcel(rows: LabRegistration[]) {
   const sheetData = [
-    ["학년", "반", "이름", "Lab", "상태", "신청시각"],
+    ["학년", "반", "이름", "조", "상태", "신청시각"],
     ...rows.slice()
       .sort((a, b) => a.grade - b.grade || a.class - b.class || a.name.localeCompare(b.name))
-      .map((r) => [r.grade, r.class, r.name, `Lab ${r.lab_number}`,
+      .map((r) => [r.grade, r.class, r.name, `${r.lab_number}조`,
         r.status === "confirmed" ? "확정" : "대기", fmtTime(r.timestamp)]),
   ];
   const wb = XLSX.utils.book_new();
@@ -736,7 +736,7 @@ function ByLabTab() {
             <div key={labNo} className="rounded-xl border border-[var(--line)] bg-white p-4">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="font-extrabold text-[var(--foreground)]">
-                  Lab {labNo}
+                  {labNo}조
                   <span className="ml-2 text-xs font-normal text-slate-400">
                     {entry.groupType === "LOW" ? "저학년" : "고학년"}
                   </span>
@@ -957,7 +957,7 @@ export function AdminClient() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "students", label: "학생 명단" },
-    { id: "by-lab", label: "Lab별 현황" },
+    { id: "by-lab", label: "조별 현황" },
     { id: "by-class", label: "반별 현황" },
     { id: "settings", label: "시간 설정" },
   ];

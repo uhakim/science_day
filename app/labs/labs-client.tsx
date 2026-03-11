@@ -243,7 +243,7 @@ export function LabsClient({ student, registrationStatus, openAt, closeAt }: Lab
         <header className="rounded-2xl border border-[var(--line)] bg-white/95 p-5 shadow">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold text-[var(--accent)]">🔬 과학의 날 Lab 신청 · {groupLabel}</p>
+              <p className="text-xs font-semibold text-[var(--accent)]">🔬 과학의 날 조 신청 · {groupLabel}</p>
               <h1 className="mt-0.5 text-2xl font-extrabold text-[var(--foreground)]">
                 {student.grade}학년 {student.classNumber}반 {student.name}
               </h1>
@@ -279,7 +279,7 @@ export function LabsClient({ student, registrationStatus, openAt, closeAt }: Lab
 
         <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
           <section className="rounded-2xl border border-[var(--line)] bg-white/95 p-5 shadow">
-            <h2 className="text-xl font-extrabold">Lab 선택</h2>
+            <h2 className="text-xl font-extrabold">조 선택</h2>
             {loading ? (
               <p className="mt-4 text-sm text-slate-600">목록을 불러오는 중...</p>
             ) : (

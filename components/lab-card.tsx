@@ -29,7 +29,7 @@ export function LabCard({ lab, buttonText, isSelected, disabled, onClick }: LabC
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-xl font-extrabold text-[var(--foreground)]">Lab {lab.labNumber}</h3>
+        <h3 className="text-xl font-extrabold text-[var(--foreground)]">{lab.labNumber}조</h3>
         {isSelected && (
           <span className="shrink-0 rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-xs font-bold text-white">
             신청됨

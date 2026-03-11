@@ -68,7 +68,7 @@ export function StatusClient({ student }: StatusClientProps) {
         <header className="rounded-2xl border border-[var(--line)] bg-white/95 p-5 shadow">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold text-[var(--accent)]">🔬 과학의 날 Lab 신청</p>
+              <p className="text-xs font-semibold text-[var(--accent)]">🔬 과학의 날 조 신청</p>
               <h1 className="mt-0.5 text-2xl font-extrabold text-[var(--foreground)]">
                 신청 현황
               </h1>
@@ -81,7 +81,7 @@ export function StatusClient({ student }: StatusClientProps) {
                 href="/labs"
                 className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-sm font-bold"
               >
-                Lab 선택 화면
+                조 선택 화면
               </Link>
               <Link
                 href="/account/password"

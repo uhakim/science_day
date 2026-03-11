@@ -19,13 +19,13 @@ export function RegistrationSummaryCard({
     return (
       <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
         <h2 className="text-lg font-extrabold">신청 현황</h2>
-        <p className="mt-2 text-sm text-slate-700">현재 신청된 Lab이 없습니다.</p>
+        <p className="mt-2 text-sm text-slate-700">현재 신청된 조가 없습니다.</p>
         {showManageLink ? (
           <Link
             href="/labs"
             className="mt-4 inline-flex rounded-xl bg-[var(--accent)] px-3 py-2 text-sm font-bold text-white"
           >
-            Lab 선택 화면으로
+            조 선택 화면으로
           </Link>
         ) : null}
       </section>
@@ -37,8 +37,8 @@ export function RegistrationSummaryCard({
       <h2 className="text-lg font-extrabold">신청 현황</h2>
       <dl className="mt-3 space-y-2 text-sm">
         <div className="flex items-center justify-between">
-          <dt className="text-slate-600">Lab</dt>
-          <dd className="font-bold">Lab{registration.labNumber}</dd>
+          <dt className="text-slate-600">조</dt>
+          <dd className="font-bold">{registration.labNumber}조</dd>
         </div>
         <div className="flex items-center justify-between">
           <dt className="text-slate-600">상태</dt>
