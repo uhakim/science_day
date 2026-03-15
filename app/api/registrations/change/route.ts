@@ -2,7 +2,7 @@ import { extractErrorCode } from "@/lib/errors";
 import { readApiSession } from "@/lib/api-auth";
 import { jsonError } from "@/lib/http";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { fetchRegistrationSettings, isRegistrationOpen } from "@/lib/registration-settings";
+import { fetchRegistrationSettingsForGrade, isRegistrationOpen } from "@/lib/registration-settings";
 
 interface ChangeRow {
   old_registration_id: number;
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const settings = await fetchRegistrationSettings();
+    const settings = await fetchRegistrationSettingsForGrade(session.grade);
     if (!isRegistrationOpen(settings)) return jsonError("REGISTRATION_CLOSED", 403);
 
     const body = (await request.json()) as { newLabId?: string };
@@ -54,4 +54,3 @@ export async function POST(request: Request) {
     return jsonError("BAD_REQUEST");
   }
 }
-

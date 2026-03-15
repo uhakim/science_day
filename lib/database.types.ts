@@ -126,6 +126,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      registration_grade_settings: {
+        Row: {
+          grade: number;
+          open_at: string | null;
+          close_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          grade: number;
+          open_at?: string | null;
+          close_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          grade?: number;
+          open_at?: string | null;
+          close_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

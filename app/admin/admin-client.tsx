@@ -828,6 +828,7 @@ function toLocalDatetimeValue(iso: string | null): string {
   return new Date(iso).toISOString().slice(0, 16);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SettingsTab() {
   const [openAt, setOpenAt] = useState("");
   const [closeAt, setCloseAt] = useState("");
@@ -952,6 +953,336 @@ function SettingsTab() {
 
 /* ─────────────────────── main ─────────────────────── */
 
+type GradeSettingStatus = "pending" | "open" | "closed";
+
+interface GradeSettingItem {
+  grade: number;
+  openAt: string | null;
+  closeAt: string | null;
+  status: GradeSettingStatus;
+}
+
+const GRADE_OPTIONS = [1, 2, 3, 4, 5, 6];
+const GRADE_STATUS_LABEL: Record<GradeSettingStatus, { label: string; badge: string }> = {
+  pending: {
+    label: "신청 대기",
+    badge: "bg-amber-50 text-amber-700",
+  },
+  open: {
+    label: "신청 진행 중",
+    badge: "bg-emerald-50 text-emerald-700",
+  },
+  closed: {
+    label: "신청 마감",
+    badge: "bg-slate-100 text-slate-600",
+  },
+};
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function toAdminDatetimeValue(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function formatSettingsDatetimeDisplay(iso: string | null): string {
+  if (!iso) return "미설정";
+  return new Date(iso).toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function GradeSettingsTab() {
+  const [settings, setSettings] = useState<GradeSettingItem[]>([]);
+  const [selectedGrades, setSelectedGrades] = useState<number[]>([1]);
+  const [openAt, setOpenAt] = useState("");
+  const [closeAt, setCloseAt] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [msgError, setMsgError] = useState(false);
+
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+
+    const res = await fetch("/api/admin/settings");
+    const data = await res.json().catch(() => null);
+
+    if (res.ok) {
+      setSettings(data?.settings ?? []);
+    } else {
+      setMsg(data?.error?.message ?? "설정을 불러오지 못했습니다.");
+      setMsgError(true);
+    }
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    // Initial settings load for the admin settings dashboard.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchSettings();
+  }, [fetchSettings]);
+
+  const toggleGrade = (grade: number) => {
+    setSelectedGrades((prev) => (
+      prev.includes(grade)
+        ? prev.filter((value) => value !== grade)
+        : [...prev, grade].sort((a, b) => a - b)
+    ));
+  };
+
+  const handleSelectAll = () => {
+    setSelectedGrades((prev) => (prev.length === GRADE_OPTIONS.length ? [] : [...GRADE_OPTIONS]));
+  };
+
+  const handleLoadSetting = (setting: GradeSettingItem) => {
+    setSelectedGrades([setting.grade]);
+    setOpenAt(toAdminDatetimeValue(setting.openAt));
+    setCloseAt(toAdminDatetimeValue(setting.closeAt));
+    setMsg(`${setting.grade}학년 설정을 불러왔습니다.`);
+    setMsgError(false);
+  };
+
+  const handleApply = async () => {
+    if (selectedGrades.length === 0) {
+      setMsg("학년을 하나 이상 선택하세요.");
+      setMsgError(true);
+      return;
+    }
+
+    if (!openAt) {
+      setMsg("시작 시간을 입력하세요.");
+      setMsgError(true);
+      return;
+    }
+
+    if (closeAt && new Date(closeAt) <= new Date(openAt)) {
+      setMsg("종료 시간은 시작 시간보다 늦어야 합니다.");
+      setMsgError(true);
+      return;
+    }
+
+    setSaving(true);
+    setMsg(null);
+
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grades: selectedGrades,
+        openAt: new Date(openAt).toISOString(),
+        closeAt: closeAt ? new Date(closeAt).toISOString() : null,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+
+    if (res.ok) {
+      setSettings(data?.settings ?? []);
+      setMsg(`${selectedGrades.join(", ")}학년 신청 시간을 저장했습니다.`);
+      setMsgError(false);
+    } else {
+      setMsg(data?.error?.message ?? "설정 저장에 실패했습니다.");
+      setMsgError(true);
+    }
+
+    setSaving(false);
+  };
+
+  const handleClear = async () => {
+    if (selectedGrades.length === 0) {
+      setMsg("초기화할 학년을 먼저 선택하세요.");
+      setMsgError(true);
+      return;
+    }
+
+    if (!confirm(`${selectedGrades.join(", ")}학년 신청 시간을 초기화하시겠습니까?\n선택한 학년은 신청 화면에서 대기 상태가 됩니다.`)) {
+      return;
+    }
+
+    setSaving(true);
+    setMsg(null);
+
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grades: selectedGrades,
+        openAt: null,
+        closeAt: null,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+
+    if (res.ok) {
+      setSettings(data?.settings ?? []);
+      setOpenAt("");
+      setCloseAt("");
+      setMsg(`${selectedGrades.join(", ")}학년 신청 시간을 초기화했습니다.`);
+      setMsgError(false);
+    } else {
+      setMsg(data?.error?.message ?? "초기화에 실패했습니다.");
+      setMsgError(true);
+    }
+
+    setSaving(false);
+  };
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="rounded-xl border border-[var(--line)] bg-white p-6 space-y-5">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-bold text-slate-700">신청 가능 시간 설정</h2>
+            <p className="text-sm text-slate-500">
+              체크한 학년에 같은 시간을 한 번에 적용할 수 있습니다.
+            </p>
+          </div>
+          <span className="text-sm font-semibold text-slate-500">
+            선택 학년: {selectedGrades.length > 0 ? `${selectedGrades.join(", ")}학년` : "없음"}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-slate-600">적용할 학년</span>
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className="text-xs font-semibold text-[var(--accent)] hover:underline"
+            >
+              {selectedGrades.length === GRADE_OPTIONS.length ? "전체 해제" : "전체 선택"}
+            </button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {GRADE_OPTIONS.map((grade) => {
+              const checked = selectedGrades.includes(grade);
+              return (
+                <label
+                  key={grade}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                    checked
+                      ? "border-[var(--accent)] bg-[var(--surface-soft)] text-[var(--accent)]"
+                      : "border-[var(--line)] bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleGrade(grade)}
+                    className="h-4 w-4"
+                  />
+                  {grade}학년
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-bold text-slate-600">시작 시간</label>
+            <input
+              type="datetime-local"
+              value={openAt}
+              onChange={(e) => setOpenAt(e.target.value)}
+              className="w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-bold text-slate-600">
+              종료 시간 <span className="font-normal text-slate-400">(비워두면 계속 신청 가능)</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={closeAt}
+              onChange={(e) => setCloseAt(e.target.value)}
+              className="w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleApply}
+            disabled={saving || !openAt}
+            className="rounded-lg bg-[var(--accent)] px-5 py-2 text-sm font-bold text-white hover:bg-[var(--accent-strong)] disabled:bg-slate-400"
+          >
+            {saving ? "저장 중.." : "선택 학년에 적용"}
+          </button>
+          <button
+            onClick={handleClear}
+            disabled={saving}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          >
+            선택 학년 초기화
+          </button>
+          {msg ? (
+            <span className={`text-sm font-semibold ${msgError ? "text-red-600" : "text-emerald-600"}`}>
+              {msg}
+            </span>
+          ) : null}
+        </div>
+
+        <p className="text-xs text-slate-400">
+          입력창에는 한국 시간 기준 값이 보이고, 저장할 때만 서버 시간 형식으로 변환됩니다.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-[var(--line)] bg-white p-6">
+        <div className="mb-4">
+          <h3 className="font-bold text-slate-700">학년별 현재 설정</h3>
+          <p className="text-sm text-slate-500">저장된 시간을 확인하고 필요하면 폼으로 불러올 수 있습니다.</p>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-slate-500">설정을 불러오는 중..</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {settings.map((setting) => {
+              const info = GRADE_STATUS_LABEL[setting.status];
+              return (
+                <div key={setting.grade} className="rounded-xl border border-[var(--line)] bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-base font-extrabold text-[var(--foreground)]">{setting.grade}학년</h4>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${info.badge}`}>
+                      {info.label}
+                    </span>
+                  </div>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">시작</dt>
+                      <dd className="mt-0.5 text-slate-700">{formatSettingsDatetimeDisplay(setting.openAt)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">종료</dt>
+                      <dd className="mt-0.5 text-slate-700">{formatSettingsDatetimeDisplay(setting.closeAt)}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSetting(setting)}
+                    className="mt-4 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white"
+                  >
+                    이 학년 값 불러오기
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AdminClient() {
   const [tab, setTab] = useState<Tab>("students");
 
@@ -984,7 +1315,7 @@ export function AdminClient() {
       {tab === "students" && <StudentsTab />}
       {tab === "by-lab" && <ByLabTab />}
       {tab === "by-class" && <ByClassTab />}
-      {tab === "settings" && <SettingsTab />}
+      {tab === "settings" && <GradeSettingsTab />}
     </div>
   );
 }

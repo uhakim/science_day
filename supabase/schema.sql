@@ -69,6 +69,30 @@ create table if not exists public.registration_settings (
 );
 insert into public.registration_settings (id) values (1) on conflict do nothing;
 
+create table if not exists public.registration_grade_settings (
+  grade smallint primary key check (grade between 1 and 6),
+  open_at timestamptz,
+  close_at timestamptz,
+  updated_at timestamptz(3) not null default date_trunc('milliseconds', clock_timestamp())
+);
+
+insert into public.registration_grade_settings (grade)
+select g.grade
+from generate_series(1, 6) as g(grade)
+on conflict (grade) do nothing;
+
+insert into public.registration_grade_settings (grade, open_at, close_at)
+select g.grade, rs.open_at, rs.close_at
+from generate_series(1, 6) as g(grade)
+cross join public.registration_settings rs
+where rs.id = 1
+on conflict (grade) do update
+set open_at = excluded.open_at,
+    close_at = excluded.close_at,
+    updated_at = date_trunc('milliseconds', clock_timestamp())
+where public.registration_grade_settings.open_at is null
+  and public.registration_grade_settings.close_at is null;
+
 create or replace function public.ms_now()
 returns timestamptz(3)
 language sql

@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/server-auth";
 import { LabsClient } from "@/app/labs/labs-client";
-import { fetchRegistrationSettings, getRegistrationStatus } from "@/lib/registration-settings";
+import { fetchRegistrationSettingsForGrade, getRegistrationStatus } from "@/lib/registration-settings";
 
 export default async function LabsPage() {
   const session = await getServerSession();
   if (!session) redirect("/login");
 
-  const settings = await fetchRegistrationSettings();
+  const settings = await fetchRegistrationSettingsForGrade(session.grade);
   const registrationStatus = getRegistrationStatus(settings);
 
   return (

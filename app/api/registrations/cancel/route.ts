@@ -2,7 +2,7 @@ import { extractErrorCode } from "@/lib/errors";
 import { readApiSession } from "@/lib/api-auth";
 import { jsonError } from "@/lib/http";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { fetchRegistrationSettings, isRegistrationOpen } from "@/lib/registration-settings";
+import { fetchRegistrationSettingsForGrade, isRegistrationOpen } from "@/lib/registration-settings";
 
 interface CancelRow {
   cancelled_registration_id: number;
@@ -15,7 +15,7 @@ export async function POST() {
   const session = await readApiSession();
   if (!session) return jsonError("UNAUTHORIZED", 401);
 
-  const settings = await fetchRegistrationSettings();
+  const settings = await fetchRegistrationSettingsForGrade(session.grade);
   if (!isRegistrationOpen(settings)) return jsonError("REGISTRATION_CLOSED", 403);
 
   const supabase = getSupabaseAdmin();
@@ -35,4 +35,3 @@ export async function POST() {
     promotedRegistrationIds: row.promoted_registration_ids,
   });
 }
-
